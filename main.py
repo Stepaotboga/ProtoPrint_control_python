@@ -52,7 +52,13 @@ class PCBHeightMapper:
         self.serial = None
         self.connect()
         self.probe = Probe(self)
-        self.probe.up()
+        self.probe.up() # поднимаем щуп вверх
+
+        #параметры станка
+        self.x_min_pos = 0.0
+        self.y_min_pos = 0.0
+        self.x_max_pos = 295.0
+        self.y_max_pos = 350.0
 
         # Параметры сканирования
         self.scan_z = -40.0
@@ -64,13 +70,16 @@ class PCBHeightMapper:
         # Параметры компенсации
         self.max_segment_length = 5.0  # Максимальная длина сегмента для интерполяции (мм)
         self.probe_attempts = 3  # Количество попыток измерения высоты
-        self.probe_retry_delay = 0.5  # Задержка между попытками (сек)
+        self.probe_retry_delay = 0.1  # Задержка между попытками (сек)
         self.offset_probe_coords = (59.0, 18.95) # Сдвиг по координатам щупа датчика относительно фрезы гравера
+        self.z_offset = 1.0 # Сдвиг по высоте. Чем больше значение, тем глубже заглубляется фреза
 
         #рабочая область
         self.corner_position = (111.0, 289.0) # позиция угла зажима печатной платы
         self.corner_x = self.corner_position[0]
         self.corner_y = self.corner_position[1]
+        self.x_border = 1.0
+        self.y_border = 1.0
 
 
 
@@ -165,20 +174,26 @@ class PCBHeightMapper:
         """
         heights = []
 
+        x = max(self.x_min_pos, x - self.offset_probe_coords[0]) # компенсация сдвига по оси X
+        y = max(self.y_min_pos, y - self.offset_probe_coords[1])  # компенсация сдвига по оси X
+
         for attempt in range(self.probe_attempts):
             try:
                 print(f"  Попытка {attempt + 1}/{self.probe_attempts}")
 
+                z = self.scan_z + self.z_offset # отход на высоту + сдвиг
+
                 # Перемещение в точку
-                self.send_command(f"G1 Z{self.scan_z:.4f} F{self.scan_feedrate}")
+                self.send_command(f"G1 Z{z:.4f} F{self.scan_feedrate}")
                 self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
 
                 # Запуск измерения
-                response = self.send_command("M327", timeout=15)
+                self.probe.down()
+                response = self.probe.probe()
 
                 if response and self.trigger_prefix in response:
                     height_str = response.split(self.trigger_prefix)[1].strip()
-                    height = float(height_str)
+                    height = float(height_str) + self.z_offset # высота
                     heights.append(height)
                     print(f"    Измерено: {height:.4f} мм")
 
