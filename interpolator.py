@@ -20,7 +20,7 @@ def load_heightmap(filename):
     grid = {}
     current_y = None
 
-    with open(filename, encoding="utf-8") as f:
+    with open(filename, "w", encoding="utf-8") as f:
 
         for line in f:
 

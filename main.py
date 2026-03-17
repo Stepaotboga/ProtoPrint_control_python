@@ -13,11 +13,11 @@ import math
 import gcode_analysis
 import interpolator
 
-SERIAL_PORT = "COM9"
+SERIAL_PORT = "COM7"
 GRID_POINTS = 10
-SCAN_Z = -40.0
+SCAN_Z = -33.0
 PROBE_ATTEMPS = 3
-FILENAME = "C:/Users/user/Desktop/ProtoPrint_control_python-master/reed_plate_2.gcode"
+FILENAME = "C:/Users/stepa.DESKTOP-SPBOIEJ/PycharmProjects/ProtoPrint_control_python/Контур 4.gcode"
 OUTPUT_FILE = "output_main.gcode"
 
 
@@ -55,12 +55,14 @@ class PCBHeightMapper:
         """
         Инициализация подключения к станку
         """
+        self.probe = None
         self.port = port
         self.baudrate = baudrate
         self.serial = None
-        #self.connect()                                     -убрать после debug
-        #self.probe = Probe(self)                           -убрать после debug
-        #self.probe.up() # поднимаем щуп вверх              -убрать после debug
+
+        self.connect()
+        self.probe = Probe(self)
+        self.probe.up() # поднимаем щуп вверх              -убрать после debug
 
         #параметры станка
         self.x_min_pos = 0.0
@@ -69,9 +71,9 @@ class PCBHeightMapper:
         self.y_max_pos = 350.0
 
         # Параметры сканирования
-        self.scan_z = -40.0
+        self.scan_z = SCAN_Z
         self.scan_feedrate = 800
-        self.probe_feedrate = 100
+        self.probe_feedrate = 200
         self.grid_points = 10
         self.trigger_prefix = "Triggered: "
 
@@ -80,10 +82,10 @@ class PCBHeightMapper:
         self.probe_attempts = 3  # Количество попыток измерения высоты
         self.probe_retry_delay = 0.1  # Задержка между попытками (сек)
         self.offset_probe_coords = (59.0, 18.95) # Сдвиг по координатам щупа датчика относительно фрезы гравера
-        self.z_offset = 1.0 # Сдвиг по высоте. Чем больше значение, тем глубже заглубляется фреза
+        self.z_offset = 3.31 # Сдвиг по высоте. Чем больше значение, тем глубже заглубляется фреза
 
         #рабочая область
-        self.corner_position = (111.0, 289.0) # позиция угла зажима печатной платы
+        self.corner_position = (111.0, 288.0) # позиция угла зажима печатной платы
         self.corner_x = self.corner_position[0]
         self.corner_y = self.corner_position[1]
         self.x_border = 1.0
@@ -98,6 +100,7 @@ class PCBHeightMapper:
 
     def connect(self):
         """Подключение к станку"""
+        print('connecting...')
         try:
             self.serial = serial.Serial(
                 port=self.port,
@@ -144,7 +147,7 @@ class PCBHeightMapper:
                 try:
                     line = self.serial.readline().decode('utf-8', errors='ignore').strip()
                     if line:
-                        print(f"  Ответ: {line}")
+                        #print(f"  Ответ: {line}")
                         response_lines.append(line)
 
                         # Проверяем на триггер
@@ -200,14 +203,12 @@ class PCBHeightMapper:
                 z = self.scan_z + self.z_offset # отход на высоту + сдвиг
 
                 # Перемещение в точку
-                #self.send_command(f"G1 Z{z:.4f} F{self.scan_feedrate}")
-                #self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
+                self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
+                self.send_command(f"G1 Z{z:.4f} F{self.scan_feedrate}")
 
                 # Запуск измерения
-                #self.probe.down()      debug
-                response = "Triggered: -42.92"
-                #response = self.probe.probe() debug
-                print(20)
+                self.probe.down()
+                response = self.probe.probe()
 
                 if response and self.trigger_prefix in response:
                     height_str = response.split(self.trigger_prefix)[1].strip()
@@ -234,7 +235,7 @@ class PCBHeightMapper:
                     time.sleep(self.probe_retry_delay)
 
             except Exception as e:
-                print(f"    Ошибка попытки {attempt + 1}: {e}")
+                #print(f"    Ошибка попытки {attempt + 1}: {e}")
                 if attempt < self.probe_attempts - 1:
                     time.sleep(self.probe_retry_delay)
                 continue
@@ -242,7 +243,7 @@ class PCBHeightMapper:
         # Если все попытки неудачны
         if heights:
             avg_height = sum(heights) / len(heights)
-            print(f"    Используем среднее после ошибок: {avg_height:.4f} мм")
+            #print(f"    Используем среднее после ошибок: {avg_height:.4f} мм")
             return avg_height
 
         print(f"    ВСЕ ПОПЫТКИ НЕУДАЧНЫ!")
@@ -390,9 +391,11 @@ class PCBHeightMapper:
 
 
         # Сканирование поверхности
+        self.send_command(f"G28")
         if not self.scan_pcb_surface(min_x_scan, max_x_scan, min_y_scan, max_y_scan):
             print("Ошибка: не удалось получить данные высот")
             return
+        self.send_command(f"G28")
 
         # Экспорт карты высот
         self.export_height_map(input_file)
