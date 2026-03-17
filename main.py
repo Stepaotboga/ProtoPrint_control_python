@@ -10,6 +10,17 @@ import json
 from datetime import datetime
 import math
 
+import gcode_analysis
+import interpolator
+
+SERIAL_PORT = "COM9"
+GRID_POINTS = 10
+SCAN_Z = -40.0
+PROBE_ATTEMPS = 3
+FILENAME = "C:/Users/user/Desktop/ProtoPrint_control_python-master/reed_plate_2.gcode"
+OUTPUT_FILE = "output_main.gcode"
+
+
 
 
 class Probe:
@@ -39,9 +50,6 @@ class Probe:
         return 1
 
 
-
-
-
 class PCBHeightMapper:
     def __init__(self, port='COM9', baudrate=115200):
         """
@@ -50,9 +58,9 @@ class PCBHeightMapper:
         self.port = port
         self.baudrate = baudrate
         self.serial = None
-        self.connect()
-        self.probe = Probe(self)
-        self.probe.up() # поднимаем щуп вверх
+        #self.connect()                                     -убрать после debug
+        #self.probe = Probe(self)                           -убрать после debug
+        #self.probe.up() # поднимаем щуп вверх              -убрать после debug
 
         #параметры станка
         self.x_min_pos = 0.0
@@ -168,6 +176,14 @@ class PCBHeightMapper:
             print("  Таймаут ожидания ответа")
             return None
 
+
+    def read_data(self, filename):
+        #  чтение gcode из файла
+        with open(filename, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        return lines
+
+
     def get_height_at_point_with_retry(self, x: float, y: float) -> Optional[float]:
         """
         Измерение высоты с несколькими попытками
@@ -184,12 +200,14 @@ class PCBHeightMapper:
                 z = self.scan_z + self.z_offset # отход на высоту + сдвиг
 
                 # Перемещение в точку
-                self.send_command(f"G1 Z{z:.4f} F{self.scan_feedrate}")
-                self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
+                #self.send_command(f"G1 Z{z:.4f} F{self.scan_feedrate}")
+                #self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
 
                 # Запуск измерения
-                self.probe.down()
-                response = self.probe.probe()
+                #self.probe.down()      debug
+                response = "Triggered: -42.92"
+                #response = self.probe.probe() debug
+                print(20)
 
                 if response and self.trigger_prefix in response:
                     height_str = response.split(self.trigger_prefix)[1].strip()
@@ -283,94 +301,8 @@ class PCBHeightMapper:
 
         return successful_points > 0
 
-    def create_height_interpolator(self):
-        """
-        Создание интерполятора для оценки высоты
-        """
-        if len(self.height_map) < 4:
-            raise ValueError(f"Недостаточно точек для интерполяции: {len(self.height_map)}")
 
-        # Подготовка данных
-        points = []
-        values = []
 
-        for (x, y), z in self.height_map.items():
-            points.append([x, y])
-            values.append(z)
-
-        points = np.array(points)
-        values = np.array(values)
-
-        # Создаем интерполятор (кубическая интерполяция)
-        try:
-            self.interpolator = interpolate.CloughTocher2DInterpolator(points, values, fill_value=np.mean(values))
-            print(f"Создан интерполятор на основе {len(points)} точек")
-        except Exception as e:
-            print(f"Ошибка создания интерполятора: {e}, используем линейную интерполяцию")
-            self.interpolator = interpolate.LinearNDInterpolator(points, values, fill_value=np.mean(values))
-
-    def estimate_height(self, x: float, y: float) -> float:
-        """
-        Оценка высоты в точке
-        """
-        if self.interpolator is None:
-            self.create_height_interpolator()
-
-        try:
-            height = float(self.interpolator(x, y))
-            return height
-        except Exception as e:
-            # Если интерполяция не удалась, используем ближайшую точку
-            print(f"Ошибка интерполяции в ({x:.2f}, {y:.2f}): {e}")
-
-            # Находим ближайшую измеренную точку
-            min_dist = float('inf')
-            nearest_height = 0
-
-            for (px, py), h in self.height_map.items():
-                dist = math.sqrt((x - px) ** 2 + (y - py) ** 2)
-                if dist < min_dist:
-                    min_dist = dist
-                    nearest_height = h
-
-            print(f"  Используем ближайшую точку: {nearest_height:.4f} мм (расстояние: {min_dist:.2f} мм)")
-            return nearest_height
-
-    def interpolate_movement(self, x1: float, y1: float, x2: float, y2: float,
-                             start_z: float, end_z: float) -> List[Tuple[float, float, float]]:
-        """
-        Разбивает движение на сегменты с интерполяцией высоты
-        """
-        segments = []
-
-        # Вычисляем длину движения
-        distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-
-        if distance <= self.max_segment_length:
-            # Не разбиваем, просто используем интерполированные высоты
-            mid_z = self.estimate_height((x1 + x2) / 2, (y1 + y2) / 2)
-            segments.append((x1, y1, start_z))
-            segments.append((x2, y2, end_z))
-        else:
-            # Разбиваем на сегменты
-            num_segments = max(2, int(math.ceil(distance / self.max_segment_length)))
-
-            for i in range(num_segments + 1):
-                t = i / num_segments
-                x = x1 + (x2 - x1) * t
-                y = y1 + (y2 - y1) * t
-
-                if i == 0:
-                    z = start_z
-                elif i == num_segments:
-                    z = end_z
-                else:
-                    # Интерполируем высоту для промежуточной точки
-                    z = self.estimate_height(x, y)
-
-                segments.append((x, y, z))
-
-        return segments
 
     def export_height_map(self, filename: str):
         """
@@ -383,35 +315,8 @@ class PCBHeightMapper:
         base_name = os.path.splitext(filename)[0]
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # CSV файл
-        csv_file = f"{base_name}_height_map_{timestamp}.csv"
-        with open(csv_file, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow(['X (mm)', 'Y (mm)', 'Height (mm)', 'Timestamp'])
-
-            for point in self.height_map_3d:
-                writer.writerow([
-                    point['x'],
-                    point['y'],
-                    point['z'],
-                    datetime.now().isoformat()
-                ])
-
-        # JSON файл
-        json_file = f"{base_name}_height_map_{timestamp}.json"
-        with open(json_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                'metadata': {
-                    'timestamp': timestamp,
-                    'points_count': len(self.height_map_3d),
-                    'grid_points': self.grid_points,
-                    'scan_z': self.scan_z
-                },
-                'height_map': self.height_map_3d
-            }, f, indent=2)
-
         # Текстовый файл для визуализации
-        txt_file = f"{base_name}_height_map_{timestamp}.txt"
+        txt_file = f"height_map.txt"
         with open(txt_file, 'w', encoding='utf-8') as f:
             f.write("=" * 60 + "\n")
             f.write(f"КАРТА ВЫСОТ ПЛАТЫ\n")
@@ -438,19 +343,9 @@ class PCBHeightMapper:
                     f.write(f"  X={point['x']:6.2f} мм: Z={point['z']:7.4f} мм\n")
 
         print(f"\nКарта высот экспортирована:")
-        print(f"  CSV: {csv_file}")
-        print(f"  JSON: {json_file}")
         print(f"  TXT: {txt_file}")
 
-        # Статистика
-        heights = [p['z'] for p in self.height_map_3d]
-        print(f"\nСтатистика высот:")
-        print(f"  Минимум: {min(heights):.4f} мм")
-        print(f"  Максимум: {max(heights):.4f} мм")
-        print(f"  Среднее: {np.mean(heights):.4f} мм")
-        print(f"  Стандартное отклонение: {np.std(heights):.4f} мм")
-
-    def process_gcode_file(self, input_file: str, output_file: str = None):
+    def process_gcode_file(self, input_file, output_file):
         """
         Основная функция обработки G-code
         """
@@ -458,337 +353,84 @@ class PCBHeightMapper:
         print(f"ОБРАБОТКА ФАЙЛА: {input_file}")
         print(f"{'=' * 60}")
 
-        # Поиск границ
-        min_x, max_x, min_y, max_y = self.find_gcode_bounds(input_file)
+        # Чтение кода
+        lines = self.read_data(input_file)
+        lines = gcode_analysis.offset_zero_position(lines) # берем минимальные xy
+
+        min_x, max_x, min_y, max_y = gcode_analysis.find_gcode_bounds_margins(lines)
+
+        # Поиск границ для снятия карты
+
+        print("min_x, max_x, min_y, max_y")
+        print(min_x, max_x, min_y, max_y)
+        print()
+
+        x_range = max_x - min_x
+        y_range = max_y - min_y
+
+        #print(lines)
+
+        zero_point = [self.corner_x, self.corner_y - y_range]
+        print("zero_point", zero_point)
+
+        print()
+
+        x_margin = 2.5
+        y_margin = 2.5
+
+        zero_point = [zero_point[0] + x_margin, zero_point[1] + y_margin]
+
+        lines = gcode_analysis.added_xy_shift(lines, zero_point)
+
+        min_x_scan, max_x_scan, min_y_scan, max_y_scan = gcode_analysis.find_gcode_bounds_margins(lines) # добавление полей
+
+        print("min_x, max_x, min_y, max_y")
+        print(min_x, max_x, min_y, max_y)
+        print()
+
 
         # Сканирование поверхности
-        if not self.scan_pcb_surface(min_x, max_x, min_y, max_y):
+        if not self.scan_pcb_surface(min_x_scan, max_x_scan, min_y_scan, max_y_scan):
             print("Ошибка: не удалось получить данные высот")
             return
 
         # Экспорт карты высот
         self.export_height_map(input_file)
 
-        # Создание интерполятора
-        self.create_height_interpolator()
-
-        # Создание выходного файла
-        if output_file is None:
-            base, ext = os.path.splitext(input_file)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"{base}_compensated_{timestamp}{ext}"
 
         # Обработка G-code
-        self.compensate_gcode_with_interpolation(input_file, output_file)
+        processed_lines = interpolator.process_gcode(lines)
 
         print(f"\n{'=' * 60}")
         print(f"ОБРАБОТКА ЗАВЕРШЕНА")
-        print(f"Входной файл: {input_file}")
-        print(f"Выходной файл: {output_file}")
-        print(f"{'=' * 60}")
 
-    def find_gcode_bounds(self, filename: str) -> Tuple[float, float, float, float]:
-        """
-        Находит границы обработки в G-code
-        """
-        print(f"\nАнализ G-code файла...")
 
-        min_x = float('inf')
-        max_x = float('-inf')
-        min_y = float('inf')
-        max_y = float('-inf')
 
-        patterns = {
-            'x': re.compile(r'X([-+]?\d*\.?\d+)'),
-            'y': re.compile(r'Y([-+]?\d*\.?\d+)'),
-            'z': re.compile(r'Z([-+]?\d*\.?\d+)')
-        }
 
-        with open(filename, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
 
-        for line_num, line in enumerate(lines, 1):
-            # Пропускаем комментарии
-            clean_line = line.split(';')[0].split('(')[0].strip()
-            if not clean_line:
-                continue
-
-            # Ищем координаты
-            x_match = patterns['x'].search(clean_line)
-            y_match = patterns['y'].search(clean_line)
-
-            if x_match:
-                x_val = float(x_match.group(1))
-                min_x = min(min_x, x_val)
-                max_x = max(max_x, x_val)
-
-            if y_match:
-                y_val = float(y_match.group(1))
-                min_y = min(min_y, y_val)
-                max_y = max(max_y, y_val)
-
-        # Если не нашли координаты
-        if min_x == float('inf'):
-            min_x, max_x = 0, 100
-            print("  Координаты X не найдены, используем 0-100 мм")
-        else:
-            print(f"  X: {min_x:.2f} - {max_x:.2f} мм")
-
-        if min_y == float('inf'):
-            min_y, max_y = 0, 100
-            print("  Координаты Y не найдены, используем 0-100 мм")
-        else:
-            print(f"  Y: {min_y:.2f} - {max_y:.2f} мм")
-
-        # Добавляем поля
-        margin_x = (max_x - min_x) * 0.1 + 5
-        margin_y = (max_y - min_y) * 0.1 + 5
-
-        min_x -= margin_x
-        max_x += margin_x
-        min_y -= margin_y
-        max_y += margin_y
-
-        print(f"  Скан с полями: X={min_x:.2f}-{max_x:.2f}, Y={min_y:.2f}-{max_y:.2f}")
-
-        return min_x, max_x, min_y, max_y
-
-    def compensate_gcode_with_interpolation(self, input_file: str, output_file: str):
-        """
-        Обработка G-code с интерполяцией высоты по траектории
-        """
-        print(f"\nКомпенсация высоты в G-code...")
-
-        patterns = {
-            'x': re.compile(r'X([-+]?\d*\.?\d+)'),
-            'y': re.compile(r'Y([-+]?\d*\.?\d+)'),
-            'z': re.compile(r'Z([-+]?\d*\.?\d+)'),
-            'f': re.compile(r'F([-+]?\d*\.?\d+)'),
-            'g': re.compile(r'G(\d+)'),
-            'm': re.compile(r'M(\d+)')
-        }
-
-        with open(input_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-
-        processed_lines = []
-        last_x = None
-        last_y = None
-        last_z = None
-        feedrate = 1000  # Значение по умолчанию
-
-        line_count = len(lines)
-        compensated_moves = 0
-
-        for line_num, line in enumerate(lines, 1):
-            original_line = line.rstrip('\n')
-            clean_line = original_line.split(';')[0].split('(')[0].strip()
-
-            # Сохраняем комментарии и пустые строки
-            if not clean_line:
-                processed_lines.append(original_line + '\n')
-                continue
-
-            # Проверяем на команды, которые нужно оставить как есть
-            if any(cmd in clean_line.upper() for cmd in ['M30', 'M2', 'M0', 'M1', 'M6', 'M3', 'M4', 'M5']):
-                processed_lines.append(original_line + '\n')
-                continue
-
-            # Ищем G-код
-            g_match = patterns['g'].search(clean_line)
-            g_code = int(g_match.group(1)) if g_match else None
-
-            # Ищем скорость
-            f_match = patterns['f'].search(clean_line)
-            if f_match:
-                feedrate = float(f_match.group(1))
-
-            # Если это не G0/G1, оставляем как есть
-            if g_code not in [0, 1]:
-                processed_lines.append(original_line + '\n')
-                continue
-
-            # Ищем координаты в текущей строке
-            x_match = patterns['x'].search(clean_line)
-            y_match = patterns['y'].search(clean_line)
-            z_match = patterns['z'].search(clean_line)
-
-            target_x = float(x_match.group(1)) if x_match else last_x
-            target_y = float(y_match.group(1)) if y_match else last_y
-            target_z = float(z_match.group(1)) if z_match else last_z
-
-            # Если нет координат X/Y, оставляем как есть
-            if target_x is None or target_y is None:
-                processed_lines.append(original_line + '\n')
-                if x_match:
-                    last_x = target_x
-                if y_match:
-                    last_y = target_y
-                if z_match:
-                    last_z = target_z
-                continue
-
-            # Если нет предыдущих координат (начало)
-            if last_x is None or last_y is None:
-                last_x = target_x
-                last_y = target_y
-                last_z = target_z if target_z is not None else 0
-                processed_lines.append(original_line + '\n')
-                continue
-
-            # Определяем целевую высоту Z
-            if target_z is None:
-                # Если Z не указан, используем последний
-                target_z = last_z
-            else:
-                # Компенсируем целевую высоту
-                surface_height = self.estimate_height(target_x, target_y)
-                target_z = target_z - surface_height
-
-            # Компенсируем начальную высоту
-            start_surface_height = self.estimate_height(last_x, last_y)
-            if last_z is not None:
-                start_z = last_z - start_surface_height
-            else:
-                start_z = 0
-
-            # Разбиваем движение на сегменты
-            segments = self.interpolate_movement(
-                last_x, last_y, target_x, target_y,
-                start_z, target_z
-            )
-
-            # Генерируем G-код для сегментов
-            for i, (seg_x, seg_y, seg_z) in enumerate(segments):
-                if i == 0 and seg_x == last_x and seg_y == last_y and abs(seg_z - start_z) < 0.001:
-                    # Пропускаем первую точку если она совпадает с текущей
-                    continue
-
-                # Формируем команду
-                cmd_parts = [f"G1"]
-
-                # Добавляем координаты с округлением до 4 знаков
-                cmd_parts.append(f"X{seg_x:.4f}")
-                cmd_parts.append(f"Y{seg_y:.4f}")
-                cmd_parts.append(f"Z{seg_z:.4f}")
-
-                # Добавляем скорость, если она была в оригинальной команде
-                if f_match or i == 0:
-                    cmd_parts.append(f"F{feedrate:.1f}")
-
-                cmd = " ".join(cmd_parts)
-
-                # Добавляем комментарий для отладки
-                if i == 0 or i == len(segments) - 1:
-                    comment = f" ; сегмент {i + 1}/{len(segments)}"
-                    if i == len(segments) - 1:
-                        comment += f" (конечная точка)"
-                else:
-                    comment = f" ; интерполяция {i + 1}/{len(segments)}"
-
-                processed_lines.append(cmd + comment + '\n')
-                compensated_moves += 1
-
-            # Обновляем последние координаты
-            last_x = target_x
-            last_y = target_y
-            last_z = target_z
-
-            # Прогресс
-            if line_num % 10 == 0 or line_num == line_count:
-                print(f"  Обработано: {line_num}/{line_count} строк")
 
         # Сохраняем результат
         with open(output_file, 'w', encoding='utf-8') as f:
             f.writelines(processed_lines)
 
         print(f"\nКомпенсация завершена:")
-        print(f"  Всего строк: {line_count}")
-        print(f"  Скомпенсировано перемещений: {compensated_moves}")
-        print(f"  Файл сохранен: {output_file}")
 
-    def close(self):
-        """Закрытие соединения"""
-        if self.serial:
-            try:
-                # Поднимаем фрезу перед завершением
-                self.send_command("G1 Z5 F500", wait_for_response=False)
-                time.sleep(1)
-                self.serial.close()
-                print("\nСоединение закрыто, фреза поднята")
-            except:
-                self.serial.close()
-                print("\nСоединение закрыто")
+
+
+
+
+
+
 
 
 def main():
-    """
-    Основная функция
-    """
-    import argparse
+    mapper = PCBHeightMapper(port=SERIAL_PORT, baudrate=115200)
+    mapper.grid_points = GRID_POINTS
+    mapper.scan_z = SCAN_Z
+    mapper.probe_attempts = PROBE_ATTEMPS
 
-    parser = argparse.ArgumentParser(
-        description='Компенсация высоты платы в G-code для фрезерного станка',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-    Примеры использования:
-      python pcb_compensator.py board.gcode
-      python pcb_compensator.py board.gcode --port COM3 --points 8
-      python pcb_compensator.py board.gcode --scan-z -38 --segment-length 3
-            """
-    )
+    mapper.process_gcode_file(FILENAME, OUTPUT_FILE)
 
-    parser.add_argument('gcode_file', help='Входной G-code файл')
-    parser.add_argument('--port', default='COM9', help='COM порт станка (по умолчанию: COM9)')
-    parser.add_argument('--baud', type=int, default=115200, help='Скорость обмена (по умолчанию: 115200)')
-    parser.add_argument('--points', type=int, default=10, help='Количество точек сканирования по каждой оси')
-    parser.add_argument('--scan-z', type=float, default=-40.0, help='Начальная высота сканирования (мм)')
-    parser.add_argument('--segment-length', type=float, default=5.0, help='Макс. длина сегмента интерполяции (мм)')
-    parser.add_argument('--attempts', type=int, default=3, help='Количество попыток измерения')
-    parser.add_argument('--output', help='Имя выходного файла (по умолчанию: имя_файла_compensated_дата.gcode)')
-
-    args = parser.parse_args()
-
-    # Проверка файла
-    if not os.path.exists(args.gcode_file):
-        print(f"Ошибка: файл не найден - {args.gcode_file}")
-        return
-
-    print(f"\n{'=' * 60}")
-    print("PCB HEIGHT COMPENSATOR")
-    print(f"{'=' * 60}")
-
-    mapper = None
-    try:
-        # Создание маппера
-        mapper = PCBHeightMapper(port=args.port, baudrate=args.baud)
-
-        # Настройка параметров
-        mapper.grid_points = args.points
-        mapper.scan_z = args.scan_z
-        mapper.max_segment_length = args.segment_length
-        mapper.probe_attempts = args.attempts
-
-        print(f"Параметры:")
-        print(f"  Файл: {args.gcode_file}")
-        print(f"  Порт: {args.port}")
-        print(f"  Точки сканирования: {args.points}×{args.points}")
-        print(f"  Высота сканирования: {args.scan_z} мм")
-        print(f"  Длина сегмента: {args.segment_length} мм")
-        print(f"  Попыток измерения: {args.attempts}")
-
-        # Обработка файла
-        mapper.process_gcode_file(args.gcode_file, args.output)
-
-    except KeyboardInterrupt:
-        print("\n\nПрограмма прервана пользователем")
-    except Exception as e:
-        print(f"\nОшибка: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        if mapper:
-            mapper.close()
 
 
 if __name__ == "__main__":
