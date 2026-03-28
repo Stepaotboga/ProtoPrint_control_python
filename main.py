@@ -15,7 +15,7 @@ import interpolator
 import types_code_run
 
 SERIAL_PORT = "COM6"
-GRID_POINTS = 10
+GRID_POINTS = 3
 SCAN_Z = -18.0
 CORNER_POINT = (75.0, 300.0)
 PROBE_ATTEMPS = 1
@@ -275,7 +275,7 @@ class PCBHeightMapper:
         print_message(f"    ВСЕ ПОПЫТКИ НЕУДАЧНЫ!")
         return None
 
-    def scan_pcb_surface(self, min_x: float, max_x: float, min_y: float, max_y: float):
+    def scan_pcb_surface(self, min_x: float, max_x: float, min_y: float, max_y: float): #старый алгоритм сканирования
         """
         Сканирование поверхности платы
         """
@@ -332,7 +332,71 @@ class PCBHeightMapper:
 
         return successful_points > 0
 
+    def scan_pcb_surface_snake(self, min_x: float, max_x: float, min_y: float, max_y: float): # сканирование карты змейкой
+        """
+        Сканирование поверхности платы
+        """'''
+        global total_points
+        if PRINT_MSG: print(f"\n{'=' * 60}")
+        if PRINT_MSG: print("НАЧАЛО СКАНИРОВАНИЯ ПОВЕРХНОСТИ ПЛАТЫ")
+        if PRINT_MSG: print(f"Диапазон X: {min_x:.2f} - {max_x:.2f} мм")
+        if PRINT_MSG: print(f"Диапазон Y: {min_y:.2f} - {max_y:.2f} мм")
+        if PRINT_MSG: print(f"Сетка: {self.grid_points}×{self.grid_points} точек")
+        if PRINT_MSG: print(f"{'=' * 60}")'''
 
+        # Генерируем сетку
+        x_points = np.linspace(min_x, max_x, self.grid_points)
+        y_points = np.linspace(min_y, max_y, self.grid_points)
+        self.xp = x_points
+        self.yp = y_points
+        self.grid = np.zeros((len(x_points),len(y_points)))
+
+        successful_points = 0
+
+        for j, y in enumerate(y_points):
+            if j % 2 == 0:
+                x_iter = range(len(x_points))
+            else:
+                x_iter = reversed(range(len(x_points)))
+
+            for i in x_iter:
+                x = x_points[i]
+
+                height = self.get_height_at_point_with_retry(x, y)
+
+                if height is not None:
+                    self.grid[i, j] = round(height, 4)
+                    print(self.grid)
+                    successful_points += 1
+
+                else:
+                    if PRINT_MSG: print(f"    ✗ Пропуск точки")
+
+                # Небольшая пауза между точками
+                time.sleep(0.2)
+
+        print(f"СКАНИРОВАНИЕ ЗАВЕРШЕНО")
+
+        return successful_points > 0
+
+    def export_height_map_snake(self, filename=MAP_FILE):
+        """
+        Экспорт карты высот в файлы
+        """
+        if not self.grid.all():
+            print("Нет данных для экспорта")
+            return
+
+
+        txt_file = filename
+        with open(txt_file, 'w', encoding='utf-8') as f:
+
+            for j, y in enumerate(self.yp):
+                for i, x in enumerate(self.xp):
+                    f.write(f"{x} {y} {self.grid[i, j]}\n")
+
+        print(f"\nКарта высот экспортирована:")
+        if PRINT_MSG: print(f"  TXT: {txt_file}")
 
 
     def export_height_map(self, filename: str):
@@ -424,18 +488,19 @@ class PCBHeightMapper:
         if RUN_TYPE == DEFAULT:
             self.send_command(f"G28")
             #self.probe.up()
-            if not self.scan_pcb_surface(min_x_scan, max_x_scan, min_y_scan, max_y_scan):
+            if not self.scan_pcb_surface_snake(min_x_scan, max_x_scan, min_y_scan, max_y_scan):
                 print("Ошибка: не удалось получить данные высот")
                 return
             self.probe.up()
             self.send_command(f"G1 Z0")
 
         # Экспорт карты высот
-        self.export_height_map(input_file)
+        #self.export_height_map(input_file)
+        self.export_height_map_snake(MAP_FILE)
 
 
         # Обработка G-code
-        processed_lines = interpolator.process_gcode(lines, MAP_FILE)
+        processed_lines = interpolator.process_gcode_2(lines, MAP_FILE)
 
         if PRINT_MSG: print(f"\n{'=' * 60}")
         print(f"ОБРАБОТКА ЗАВЕРШЕНА")

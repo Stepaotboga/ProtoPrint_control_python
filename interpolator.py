@@ -1,9 +1,10 @@
 import re
 import math
+import numpy as np
 
 SEGMENT_LENGTH = 0.1
 INTERPOLATION_TYPE = "bicubic"
-COMPENSATION = False
+COMPENSATION = True
 
 
 def parse_axis(line, axis):
@@ -41,6 +42,42 @@ def load_heightmap(filename):
     xs = sorted(next(iter(grid.values())).keys())
 
     return xs, ys, grid
+
+# карта змейки
+def load_map(map_file):
+
+    data = np.loadtxt(map_file)
+
+    xs = np.unique(data[:,0])
+    ys = np.unique(data[:,1])
+
+    grid = data[:,2].reshape(len(xs),len(ys))
+
+    return xs,ys,grid
+
+# алгоритм со змейкой
+def interpolate_height(x, y, xs, ys, grid):
+
+    ix = np.searchsorted(xs, x) - 1
+    iy = np.searchsorted(ys, y) - 1
+
+    ix = np.clip(ix, 0, len(xs)-2)
+    iy = np.clip(iy, 0, len(ys)-2)
+
+    x1,x2 = xs[ix], xs[ix+1]
+    y1,y2 = ys[iy], ys[iy+1]
+
+    q11 = grid[ix,iy]
+    q12 = grid[ix,iy+1]
+    q21 = grid[ix+1,iy]
+    q22 = grid[ix+1,iy+1]
+
+    return (
+        q11*(x2-x)*(y2-y) +
+        q21*(x-x1)*(y2-y) +
+        q12*(x2-x)*(y-y1) +
+        q22*(x-x1)*(y-y1)
+    ) / ((x2-x1)*(y2-y1))
 
 
 # ----------------------------
@@ -129,6 +166,125 @@ def open_and_process_gcode(input_file, output_file):
         for i in data:
             fout.write(i)
     print("Done!")
+
+
+def process_gcode_2(lines, map_file="map.txt"):
+
+    x_s,y_s,grid = load_map(map_file)
+    x = y = z = e = 0
+
+    x_defined = 1 # было ли последнее перемещение по этой оси
+    y_defined = 1
+    z_defined = 1
+
+    absolute_e = True
+
+    output_data = []
+
+    for line in lines:
+
+        if line.startswith("M82"):
+            absolute_e = True
+
+        if line.startswith("M83"):
+            absolute_e = False
+
+        if line.startswith("G92"):
+            ne = parse_axis(line, "E")
+            if ne is not None:
+                e = ne
+            output_data.append(line)
+            continue
+
+        if line.startswith(("G0", "G1")):
+
+            is_xyz_move = (parse_axis(line, "X") is not None) or (parse_axis(line, "Y") is not None) or (parse_axis(line, "Z") is not None)
+            is_e_move = (parse_axis(line, "E") is not None) and not is_xyz_move
+
+            # Проверка на ретракт
+            if is_e_move:
+                ne = parse_axis(line, "E")
+
+                if absolute_e:
+                    e = ne
+                else:
+                    e += ne
+
+                output_data.append(line)
+                continue
+
+            # Проверка на иные команды если нет движения по осям xyz
+            if not is_xyz_move:
+                output_data.append(line)
+                continue
+
+            nx = parse_axis(line, "X")
+            ny = parse_axis(line, "Y")
+            nz = parse_axis(line, "Z")
+            ne = parse_axis(line, "E")
+            nf = parse_axis(line, "F")
+
+            if nx is None:
+                nx = x
+            if ny is None:
+                ny = y
+            if nz is None:
+                nz = z
+            if ne is None:
+                ne = e
+
+            if x_defined:
+                x = nx+0.1
+                x_defined = 0
+            if y_defined:
+                y = ny+0.1
+                y_defined = 0
+            if z_defined:
+                z = nz+0.1
+                z_defined = 0
+
+            dx = nx - x
+            dy = ny - y
+            dz = nz - z
+
+            dist = math.sqrt(dx * dx + dy * dy)
+
+            steps = max(1, int(dist / SEGMENT_LENGTH))
+
+            for i in range(1, steps + 1):
+
+                t = i / steps
+
+                sx = x + dx * t
+                sy = y + dy * t
+                sz = z + dz * t
+
+                if not COMPENSATION:
+                    correction = 0
+                else:
+                    correction = interpolate_height(sx,sy,x_s,y_s,grid)
+
+                if absolute_e:
+                    se = e + (ne - e) * t
+                else:
+                    se = (ne / steps)
+
+                gline = f"G1 X{sx:.3f} Y{sy:.3f} Z{sz + correction:.4f}"
+
+                if ne is not None:
+                    gline += f' E{se:.5f}'
+
+                if nf and i == steps:
+                    gline += f" F{nf}"
+
+                output_data.append(gline + "\n")
+
+            x, y, z, e = nx, ny, nz, ne
+
+        else:
+            output_data.append(line)
+
+    return output_data
 
 
 
