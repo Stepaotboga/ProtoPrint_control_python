@@ -1,10 +1,9 @@
 import re
 import math
-from configparser import Interpolation
-from typing import Any
 
 SEGMENT_LENGTH = 0.1
 INTERPOLATION_TYPE = "bicubic"
+COMPENSATION = False
 
 
 def parse_axis(line, axis):
@@ -20,7 +19,7 @@ def load_heightmap(filename):
     grid = {}
     current_y = None
 
-    with open(filename, "w", encoding="utf-8") as f:
+    with open(filename, encoding="utf-8") as f:
 
         for line in f:
 
@@ -138,10 +137,15 @@ def open_and_process_gcode(input_file, output_file):
 # ----------------------------
 # обработка gcode
 # ----------------------------
-def process_gcode(lines):
+def process_gcode(lines, map_file="map.txt"):
 
-    xs, ys, grid = load_heightmap("heightmap.txt")
+    xs, ys, grid = load_heightmap(map_file)
     x = y = z = e = 0
+
+    x_defined = 1 # было ли последнее перемещение по этой оси
+    y_defined = 1
+    z_defined = 1
+
     absolute_e = True
 
     output_data = []
@@ -198,6 +202,16 @@ def process_gcode(lines):
             if ne is None:
                 ne = e
 
+            if x_defined:
+                x = nx+0.1
+                x_defined = 0
+            if y_defined:
+                y = ny+0.1
+                y_defined = 0
+            if z_defined:
+                z = nz+0.1
+                z_defined = 0
+
             dx = nx - x
             dy = ny - y
             dz = nz - z
@@ -214,7 +228,9 @@ def process_gcode(lines):
                 sy = y + dy * t
                 sz = z + dz * t
 
-                if INTERPOLATION_TYPE == "bicubic":
+                if not COMPENSATION:
+                    correction = 0
+                elif INTERPOLATION_TYPE == "bicubic":
                     correction = bicubic(xs, ys, grid, sx, sy)
                 else:
                     correction = interpolate(xs, ys, grid, sx, sy)
@@ -248,7 +264,7 @@ def process_gcode(lines):
 def main():
 
     open_and_process_gcode(
-        "reed_plate_2.gcode",
+        "Контур 4.gcode",
         "output_corrected.gcode",
     )
 
