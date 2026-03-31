@@ -17,16 +17,23 @@ import types_code_run
 SERIAL_PORT = "COM6"
 GRID_POINTS = 7
 SCAN_Z = -23.0
+MIN_SCAN_Z = -28.0
+MAX_SCAN_Z = -1.0
 CORNER_POINT = (107.0, 317.0)
 OFFSET_PROBE = (59.0, 18.95, 6.05) # Сдвиг по координатам щупа датчика относительно фрезы гравера
+OFFSET_EXTRUDER = (0.0, -10.0, 4) # Сдвиг сопла экструдера относительно фрезы
 INSTRUMENT_HEIGH_POS = (263.0, 294.0, -20.0) # позиция датчика высоты инструмента
 PROBE_ATTEMPS = 2
 
 FILENAME = "denis.gcode"
 OUTPUT_FILE = "output_main.gcode"
-MAP_FILE = f"map.txt"
+MAP_FILE = f"map.txt" # нерабочий
 MAP_FILE_2 = f"map_2.txt"
 PRINT_MSG = 0
+SCAN_MAP = 1 # сканировать ли карту
+SCAN_INSTRUMENT_Z = 1 # измерять ли высоту инструмента
+USE_EXTRUDER = 0 # используется экструдер вместо фрезера
+AUTO_SCAN_Z = 1 # автоматическое измерение средней высоты автоматического сканирования
 
 DEFAULT = types_code_run.DEFAULT
 DEBUG = types_code_run.DEBUG
@@ -276,63 +283,6 @@ class PCBHeightMapper:
         print_message(f"    ВСЕ ПОПЫТКИ НЕУДАЧНЫ!")
         return None
 
-    def scan_pcb_surface(self, min_x: float, max_x: float, min_y: float, max_y: float): #старый алгоритм сканирования
-        """
-        Сканирование поверхности платы
-        """
-        global total_points
-        if PRINT_MSG: print(f"\n{'=' * 60}")
-        if PRINT_MSG: print("НАЧАЛО СКАНИРОВАНИЯ ПОВЕРХНОСТИ ПЛАТЫ")
-        if PRINT_MSG: print(f"Диапазон X: {min_x:.2f} - {max_x:.2f} мм")
-        if PRINT_MSG: print(f"Диапазон Y: {min_y:.2f} - {max_y:.2f} мм")
-        if PRINT_MSG: print(f"Сетка: {self.grid_points}×{self.grid_points} точек")
-        if PRINT_MSG: print(f"{'=' * 60}")
-
-        # Генерируем сетку
-        x_points = np.linspace(min_x, max_x, self.grid_points)
-        y_points = np.linspace(min_y, max_y, self.grid_points)
-
-        self.height_map = {}
-        self.height_map_3d = []
-        self.grid = np.zeros((len(x_points),len(y_points)))
-
-        successful_points = 0
-
-        for i, x in enumerate(x_points):
-            if PRINT_MSG: print(f"\nСтрока {i + 1}/{self.grid_points}:")
-
-            for j, y in enumerate(y_points):
-                point_num = i * self.grid_points + j + 1
-                total_points = self.grid_points ** 2
-
-                if PRINT_MSG: print(f"  Точка {point_num}/{total_points}: X={x:.2f}, Y={y:.2f}")
-
-                height = self.get_height_at_point_with_retry(x, y)
-
-                if height is not None:
-                    self.height_map[(round(x, 4), round(y, 4))] = height
-                    self.height_map_3d.append({
-                        'x': round(x, 4),
-                        'y': round(y, 4),
-                        'z': round(height, 4)
-                    })
-                    self.grid[i, j] = round(height, 4)
-                    print(self.grid)
-                    successful_points += 1
-                    if PRINT_MSG: print(f"    ✓ Сохранено: {height:.4f} мм")
-                else:
-                    if PRINT_MSG: print(f"    ✗ Пропуск точки")
-
-                # Небольшая пауза между точками
-                time.sleep(0.2)
-
-        if PRINT_MSG: print(f"\n{'=' * 60}")
-        print(f"СКАНИРОВАНИЕ ЗАВЕРШЕНО")
-        if PRINT_MSG: print(f"Успешных измерений: {successful_points}/{total_points}")
-        if PRINT_MSG: print(f"{'=' * 60}")
-
-        return successful_points > 0
-
     def scan_pcb_surface_snake(self, min_x: float, max_x: float, min_y: float, max_y: float): # сканирование карты змейкой
         """
         Сканирование поверхности платы
@@ -399,48 +349,6 @@ class PCBHeightMapper:
         print(f"\nКарта высот экспортирована:")
         if PRINT_MSG: print(f"  TXT: {txt_file}")
 
-
-    def export_height_map(self, filename: str):
-        """
-        Экспорт карты высот в файлы
-        """
-        if not self.height_map_3d:
-            print("Нет данных для экспорта")
-            return
-
-        base_name = os.path.splitext(filename)[0]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Текстовый файл для визуализации
-        txt_file = MAP_FILE
-        with open(txt_file, 'w', encoding='utf-8') as f:
-            f.write("=" * 60 + "\n")
-            f.write(f"КАРТА ВЫСОТ ПЛАТЫ\n")
-            f.write(f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Всего точек: {len(self.height_map_3d)}\n")
-            f.write("=" * 60 + "\n\n")
-
-            # Группируем по Y для удобного отображения
-            y_groups = {}
-            for point in self.height_map_3d:
-                y = point['y']
-                if y not in y_groups:
-                    y_groups[y] = []
-                y_groups[y].append(point)
-
-            # Сортируем Y
-            sorted_y = sorted(y_groups.keys())
-
-            for y in sorted_y:
-                f.write(f"\nY = {y:.2f} мм:\n")
-                points = sorted(y_groups[y], key=lambda p: p['x'])
-
-                for point in points:
-                    f.write(f"  X={point['x']:6.2f} мм: Z={point['z']:7.4f} мм\n")
-
-        print(f"\nКарта высот экспортирована:")
-        if PRINT_MSG: print(f"  TXT: {txt_file}")
-
     def process_gcode_file(self, input_file, output_file):
         """
         Основная функция обработки G-code
@@ -486,18 +394,20 @@ class PCBHeightMapper:
 
 
         # Сканирование поверхности
-        if RUN_TYPE == DEFAULT:
-            self.send_command(f"G28")
-            #self.probe.up()
-            if not self.scan_pcb_surface_snake(min_x_scan, max_x_scan, min_y_scan, max_y_scan):
-                print("Ошибка: не удалось получить данные высот")
-                return
-            self.probe.up()
-            self.send_command(f"G1 Z0")
+        if SCAN_MAP:
+            if RUN_TYPE == DEFAULT:
+                self.send_command(f"G28")
+                #self.probe.up()
+                if not self.scan_pcb_surface_snake(min_x_scan, max_x_scan, min_y_scan, max_y_scan):
+                    print("Ошибка: не удалось получить данные высот")
+                    return
+                self.probe.up()
+                self.send_command(f"G1 Z0")
 
-        # Экспорт карты высот
-        #self.export_height_map(input_file)
-        self.export_height_map_snake(MAP_FILE_2)
+            # Экспорт карты высот
+            #self.export_height_map(input_file)
+            self.export_height_map_snake(MAP_FILE_2)
+
 
 
         # Обработка G-code
