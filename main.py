@@ -15,27 +15,29 @@ import interpolator
 import types_code_run
 
 SERIAL_PORT = "COM6"
-GRID_POINTS = 3
-SCAN_Z = -18.0
-CORNER_POINT = (75.0, 300.0)
-PROBE_ATTEMPS = 1
-FILENAME = "C:/Users/stepa.DESKTOP-SPBOIEJ/PycharmProjects/ProtoPrint_control_python/Контур 4.gcode"
+GRID_POINTS = 7
+SCAN_Z = -23.0
+CORNER_POINT = (107.0, 317.0)
+OFFSET_PROBE = (59.0, 18.95, 6.05) # Сдвиг по координатам щупа датчика относительно фрезы гравера
+INSTRUMENT_HEIGH_POS = (263.0, 294.0, -20.0) # позиция датчика высоты инструмента
+PROBE_ATTEMPS = 2
+
+FILENAME = "denis.gcode"
 OUTPUT_FILE = "output_main.gcode"
 MAP_FILE = f"map.txt"
 MAP_FILE_2 = f"map_2.txt"
 PRINT_MSG = 0
-
-start_code_time = time.time()
-if 1 or PRINT_MSG:
-    print_message = lambda inp: print(str(round(time.time() - start_code_time, 3)) + ":\t" + str(inp))
-else:
-    print_message = lambda inp: 1
 
 DEFAULT = types_code_run.DEFAULT
 DEBUG = types_code_run.DEBUG
 RUN_TYPE = DEFAULT # DEFAULT
 
 
+start_code_time = time.time()
+if 1 or PRINT_MSG:
+    print_message = lambda inp: print(str(round(time.time() - start_code_time, 3)) + ":\t" + str(inp))
+else:
+    print_message = lambda inp: 1
 
 
 class Probe:
@@ -86,15 +88,14 @@ class PCBHeightMapper:
         self.scan_z = SCAN_Z
         self.scan_feedrate = 1000
         self.probe_feedrate = 300
-        self.grid_points = 10
+        self.grid_points = GRID_POINTS
         self.trigger_prefix = "Triggered: "
 
         # Параметры компенсации
-        self.max_segment_length = 5.0  # Максимальная длина сегмента для интерполяции (мм)
-        self.probe_attempts = 3  # Количество попыток измерения высоты
+        self.probe_attempts = PROBE_ATTEMPS  # Количество попыток измерения высоты
         self.probe_retry_delay = 0.1  # Задержка между попытками (сек)
-        self.offset_probe_coords = (59.0, 18.95) # Сдвиг по координатам щупа датчика относительно фрезы гравера
-        self.z_offset = 3.31 # Сдвиг по высоте. Чем больше значение, тем глубже заглубляется фреза
+        self.offset_probe_coords = OFFSET_PROBE[:2] # Сдвиг по координатам щупа датчика относительно фрезы гравера
+        self.z_offset = OFFSET_PROBE[2] # Сдвиг по высоте. Чем больше значение, тем глубже заглубляется фреза
 
         #рабочая область
         self.corner_position = CORNER_POINT # позиция угла зажима печатной платы
@@ -365,7 +366,7 @@ class PCBHeightMapper:
                 height = self.get_height_at_point_with_retry(x, y)
 
                 if height is not None:
-                    self.grid[i, j] = round(height, 4)
+                    self.grid[j, i] = round(height, 4)
                     print(self.grid)
                     successful_points += 1
 
@@ -496,11 +497,11 @@ class PCBHeightMapper:
 
         # Экспорт карты высот
         #self.export_height_map(input_file)
-        self.export_height_map_snake(MAP_FILE)
+        self.export_height_map_snake(MAP_FILE_2)
 
 
         # Обработка G-code
-        processed_lines = interpolator.process_gcode_2(lines, MAP_FILE)
+        processed_lines = interpolator.process_gcode_2(lines, MAP_FILE_2)
 
         if PRINT_MSG: print(f"\n{'=' * 60}")
         print(f"ОБРАБОТКА ЗАВЕРШЕНА")
@@ -527,7 +528,6 @@ class PCBHeightMapper:
 def main():
     mapper = PCBHeightMapper(port=SERIAL_PORT, baudrate=115200)
     mapper.grid_points = GRID_POINTS
-    mapper.scan_z = SCAN_Z
     mapper.probe_attempts = PROBE_ATTEMPS
 
     mapper.process_gcode_file(FILENAME, OUTPUT_FILE)

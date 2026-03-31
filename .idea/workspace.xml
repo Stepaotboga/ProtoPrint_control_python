@@ -4,12 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="77fd6889-4fca-41a1-8064-7ba44130983c" name="Changes" comment="brobe 777">
+    <list default="true" id="77fd6889-4fca-41a1-8064-7ba44130983c" name="Changes" comment="working interpolation">
+      <change afterPath="$PROJECT_DIR$/show_map.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/interpolator.py" beforeDir="false" afterPath="$PROJECT_DIR$/interpolator.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/map.txt" beforeDir="false" afterPath="$PROJECT_DIR$/map.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output_main.gcode" beforeDir="false" afterPath="$PROJECT_DIR$/output_main.gcode" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run.gcode" beforeDir="false" afterPath="$PROJECT_DIR$/run.gcode" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/z_shift.py" beforeDir="false" afterPath="$PROJECT_DIR$/z_shift.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -51,6 +52,7 @@
   "keyToString": {
     "Python.interpolator.executor": "Debug",
     "Python.main.executor": "Run",
+    "Python.show_map.executor": "Run",
     "Python.z_shift.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "master",
@@ -63,7 +65,7 @@
       <recent name="C:\Users\stepa.DESKTOP-SPBOIEJ\PycharmProjects\ProtoPrint_control_python" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.main">
+  <component name="RunManager" selected="Python.show_map">
     <configuration name="interpolator" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="ProtoPrint_control_python" />
       <option name="ENV_FILES" value="" />
@@ -108,6 +110,28 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="show_map" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="ProtoPrint_control_python" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/show_map.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="z_shift" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="ProtoPrint_control_python" />
       <option name="ENV_FILES" value="" />
@@ -132,9 +156,10 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.show_map" />
         <item itemvalue="Python.main" />
-        <item itemvalue="Python.interpolator" />
         <item itemvalue="Python.z_shift" />
+        <item itemvalue="Python.interpolator" />
       </list>
     </recent_temporary>
   </component>
@@ -178,7 +203,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774700556809</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="working interpolation">
+      <option name="closed" value="true" />
+      <created>1774707021522</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1774707021522</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -196,6 +229,7 @@
     <MESSAGE value="first" />
     <MESSAGE value="1111" />
     <MESSAGE value="brobe 777" />
-    <option name="LAST_COMMIT_MESSAGE" value="brobe 777" />
+    <MESSAGE value="working interpolation" />
+    <option name="LAST_COMMIT_MESSAGE" value="working interpolation" />
   </component>
 </project>

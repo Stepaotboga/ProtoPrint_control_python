@@ -38,7 +38,7 @@ def added_z_offset(lines, z_offset=0.0):
 
 input_file = "output_main.gcode"
 output_file = "run.gcode"
-offset_z = -7.1
+offset_z = -6.05*2
 with open(input_file) as fin, open(output_file, "w") as fout:
     lines = []
     for line in fin:
