@@ -15,36 +15,45 @@ import interpolator
 import types_code_run
 
 SERIAL_PORT = "COM6"
-GRID_POINTS = 7
-SCAN_Z = -23.0
-MIN_SCAN_Z = -28.0
-MAX_SCAN_Z = -1.0
-CORNER_POINT = (107.0, 317.0)
+
+"""ПАРАМЕТРЫ ДЛЯ СКАНИРОВАНИЯ"""
+SCAN_MAP = 1 # сканировать ли карту
+AUTO_SCAN_Z = 1 # автоматическое измерение средней высоты автоматического сканирования
+GRID_POINTS = 3
+PROBE_ATTEMPS = 1
+SCAN_Z = -23.0 # Высота сканирования по умолчанию
+MIN_SCAN_Z = -28.0 # Минимально возможная высота автоматического поиска высоты сканирования
+MAX_SCAN_Z = -1.0 # Максимально возможная высота автоматического поиска высоты сканирования
+HOP_SCAN_Z = -1.0 # Подъем для сканирования карты
+
+"""ПАРАМЕТРЫ ДЛЯ ОБРАБОТКИ"""
+CORNER_POINT = (105.0, 290.0) # угол закрепления заготовки
 OFFSET_PROBE = (59.0, 18.95, 6.05) # Сдвиг по координатам щупа датчика относительно фрезы гравера
 OFFSET_EXTRUDER = (0.0, -10.0, 4) # Сдвиг сопла экструдера относительно фрезы
 INSTRUMENT_HEIGH_POS = (263.0, 294.0, -20.0) # позиция датчика высоты инструмента
-PROBE_ATTEMPS = 2
 
-FILENAME = "denis.gcode"
+"""ПАРАМЕТРЫ ФАЙЛОВ"""
+FILENAME = "rdfe.gcode"
 OUTPUT_FILE = "output_main.gcode"
 MAP_FILE = f"map.txt" # нерабочий
 MAP_FILE_2 = f"map_2.txt"
-PRINT_MSG = 0
-SCAN_MAP = 1 # сканировать ли карту
-SCAN_INSTRUMENT_Z = 1 # измерять ли высоту инструмента
-USE_EXTRUDER = 0 # используется экструдер вместо фрезера
-AUTO_SCAN_Z = 1 # автоматическое измерение средней высоты автоматического сканирования
 
+"""ТИП РАБОТЫ КОДА"""
 DEFAULT = types_code_run.DEFAULT
 DEBUG = types_code_run.DEBUG
 RUN_TYPE = DEFAULT # DEFAULT
-
+PRINT_MSG = 0
+USE_EXTRUDER = 0 # используется экструдер вместо фрезера
 
 start_code_time = time.time()
 if 1 or PRINT_MSG:
     print_message = lambda inp: print(str(round(time.time() - start_code_time, 3)) + ":\t" + str(inp))
 else:
     print_message = lambda inp: 1
+
+AUTO_SCAN_Z = AUTO_SCAN_Z and SCAN_MAP
+
+"""КОНЕЦ ПАРАМЕТРОВ"""
 
 
 class Probe:
@@ -218,6 +227,56 @@ class PCBHeightMapper:
             lines = f.readlines()
         return lines
 
+    def automotive_find_scan_z(self, x: float, y: float):
+        '''
+        автоматические нахождение высоты сканирования на средней точке у gcode
+        '''
+        cycles = 3
+        heights = []
+        range_cycles = round(abs(MAX_SCAN_Z - MIN_SCAN_Z), 2)
+        delta_cycles = round(range_cycles/cycles, 2)
+        for i in range(cycles):
+            z = MAX_SCAN_Z - delta_cycles * i
+            heights.append(z)
+
+        # Перемещение в точку
+        x = max(self.x_min_pos, x - self.offset_probe_coords[0])  # компенсация сдвига по оси X
+        y = max(self.y_min_pos, y - self.offset_probe_coords[1])  # компенсация сдвига по оси Y
+
+        self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
+        self.send_command(f"M400")
+        self.send_command(f"G1 Z0 F{self.scan_feedrate}")
+        self.send_command(f"M400")
+
+        is_found_z = 0
+        for z_scan in heights:
+            self.send_command(f"G1 Z{z_scan:.4f} F{self.scan_feedrate}")
+            self.send_command(f"M400")
+
+            # Запуск измерения
+            self.probe.down()
+            response = self.probe.probe()
+            if response and self.trigger_prefix in response:
+                height_str = response.split(self.trigger_prefix)[1].strip()
+                height = round(float(height_str) + HOP_SCAN_Z, 2)
+                self.scan_z = height
+                is_found_z = 1
+                break
+
+        if not is_found_z:
+            #self.scan_z = self.scan_z
+            return False
+
+        return True
+
+    def find_midpoint_gcode(self, lines):
+        min_x, max_x, min_y, max_y = gcode_analysis.find_gcode_bounds_margins(lines)
+        mid_x = round((max_x + min_x)/2, 3)
+        mid_y = round((max_y + min_y)/2, 3)
+        return (mid_x, mid_y)
+
+
+
 
     def get_height_at_point_with_retry(self, x: float, y: float) -> Optional[float]:
         """
@@ -226,7 +285,7 @@ class PCBHeightMapper:
         heights = []
 
         x = max(self.x_min_pos, x - self.offset_probe_coords[0]) # компенсация сдвига по оси X
-        y = max(self.y_min_pos, y - self.offset_probe_coords[1])  # компенсация сдвига по оси X
+        y = max(self.y_min_pos, y - self.offset_probe_coords[1])  # компенсация сдвига по оси Y
 
         for attempt in range(self.probe_attempts):
             try:
@@ -359,7 +418,7 @@ class PCBHeightMapper:
 
         # Чтение кода
         lines = self.read_data(input_file)
-        lines = gcode_analysis.offset_zero_position(lines) # берем минимальные xy
+        lines = gcode_analysis.offset_to_zero_position(lines) # берем минимальные xy
 
         min_x, max_x, min_y, max_y = gcode_analysis.find_gcode_bounds_margins(lines)
 
@@ -398,6 +457,15 @@ class PCBHeightMapper:
             if RUN_TYPE == DEFAULT:
                 self.send_command(f"G28")
                 #self.probe.up()
+
+                if AUTO_SCAN_Z:
+                    mid_x, mid_y = self.find_midpoint_gcode(lines)
+                    if self.automotive_find_scan_z(mid_x, mid_y):
+                        print("найден нулевой уровень сканирования")
+                    else:
+                        print('не найден нулевой уровень, используем по умолчанию')
+
+
                 if not self.scan_pcb_surface_snake(min_x_scan, max_x_scan, min_y_scan, max_y_scan):
                     print("Ошибка: не удалось получить данные высот")
                     return

@@ -86,7 +86,7 @@ def find_gcode_bounds_margins_reverse(lines, margin_x=MARGIN_X, margin_y=MARGIN_
     return min_x, max_x, min_y, max_y
 
 
-def offset_zero_position(lines): # находит минимальную позицию по xy и сдвигает все на минимум, чтобы минимальные поиции были на нуле
+def offset_to_zero_position(lines): # находит минимальную позицию по xy и сдвигает все на минимум, чтобы минимальные поиции были на нуле
     min_x, max_x, min_y, max_y = find_gcode_bounds(lines)
     offset = (-min_x, -min_y)
     return added_xy_shift(lines, offset)
