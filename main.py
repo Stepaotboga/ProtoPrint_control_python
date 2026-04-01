@@ -27,10 +27,10 @@ MAX_SCAN_Z = -1.0 # Максимально возможная высота ав�
 HOP_SCAN_Z = -1.0 # Подъем для сканирования карты
 
 """ПАРАМЕТРЫ ДЛЯ ОБРАБОТКИ"""
-CORNER_POINT = (105.0, 290.0) # угол закрепления заготовки
-OFFSET_PROBE = (59.0, 18.95, 6.05) # Сдвиг по координатам щупа датчика относительно фрезы гравера
+CORNER_POINT = (95.0, 290.0) # угол закрепления заготовки
+OFFSET_PROBE = (60.0, 21.95, 6.05) # Сдвиг по координатам щупа датчика относительно фрезы гравера
 OFFSET_EXTRUDER = (0.0, -10.0, 4) # Сдвиг сопла экструдера относительно фрезы
-INSTRUMENT_HEIGH_POS = (263.0, 294.0, -20.0) # позиция датчика высоты инструмента
+INSTRUMENT_HEIGH_POS = (263.0, 294.0, -23.0) # позиция датчика высоты инструмента
 
 """ПАРАМЕТРЫ ФАЙЛОВ"""
 FILENAME = "rdfe.gcode"
@@ -220,10 +220,27 @@ class PCBHeightMapper:
             print_message("  Таймаут ожидания ответа")
             return None
 
-    def find_h_instrument(self, x: float, y: float, z: float):
+    def find_h_instrument(self, x: float, y: float, z: float, cmd="M329"):
         try:
-            self.probe.up()
-            self.send_command(f"G1 Z0 F{self.scan_feedrate}")
+            #self.send_command(f"G1 Z0 F{self.scan_feedrate}")
+            #self.send_command(f"M400")
+            self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
+            self.send_command(f"M400")
+            self.send_command(f"G1 Z{z:.4f} F{self.scan_feedrate}")
+            self.send_command(f"M400")
+            if cmd == "M327":
+                self.probe.down()
+
+            response = self.send_command(cmd, timeout=15)
+            if response and self.trigger_prefix in response:
+                height_str = response.split(self.trigger_prefix)[1].strip()
+                h_instrument = float(height_str)
+                return round(h_instrument, 6)
+            raise Exception
+        except Exception as exc:
+            print("Ошибка")
+            return "err"
+
 
     def auto_find_delta_instrument(self): # автоматический поиск высоты инструмента
         try:
@@ -233,18 +250,35 @@ class PCBHeightMapper:
 
             if not USE_EXTRUDER:
                 x, y, z = INSTRUMENT_HEIGH_POS
+            else:
+                x, y, z = INSTRUMENT_HEIGH_POS
 
-                self.send_command(f"G1 Z{z:.4f} F{self.scan_feedrate}")
-                self.send_command(f"M400")
-                self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
-                self.send_command(f"M400")
+            h_instr = self.find_h_instrument(x, y, z)
+            if h_instr == "err":
+                raise Exception
 
-                response = self.send_command("M329", timeout=15)
-                if response and self.trigger_prefix in response:
-                    height_str = response.split(self.trigger_prefix)[1].strip()
-                    h_instrument = float(height_str)
-                else:
-                    raise Exception
+            x_p = INSTRUMENT_HEIGH_POS[0] - OFFSET_PROBE[0]
+            y_p = INSTRUMENT_HEIGH_POS[1] - OFFSET_PROBE[1]
+            z_p = INSTRUMENT_HEIGH_POS[2] + OFFSET_PROBE[2] + 3.0
+
+            self.send_command(f"G1 Z0 F{self.scan_feedrate}")
+            self.send_command(f"M400")
+
+            h_probe = self.find_h_instrument(x_p, y_p, z_p, "M327")
+
+            self.probe.up()
+            self.send_command(f"G1 Z0 F{self.scan_feedrate}")
+            self.send_command(f"M400")
+
+            if h_probe == "err":
+                raise Exception
+            delta = round(h_probe - h_instr, 6)
+            self.z_offset = delta
+            return delta
+
+        except Exception:
+            print('err')
+            return 'err'
 
 
 
@@ -335,7 +369,8 @@ class PCBHeightMapper:
 
                 if response and self.trigger_prefix in response:
                     height_str = response.split(self.trigger_prefix)[1].strip()
-                    height = float(height_str) - self.z_offset # высота
+                    #height = float(height_str) - self.z_offset # высота            ------------------ НЕРАБОЧАЯ ХРЕЕНЬ
+                    height = float(height_str) # высота
                     heights.append(height)
                     print_message(f"    Измерено: {height:.4f} мм")
 
@@ -506,10 +541,15 @@ class PCBHeightMapper:
             #self.export_height_map(input_file)
             self.export_height_map_snake(MAP_FILE_2)
 
-
-
+        #датчик высоты инструмента
+        if self.auto_find_delta_instrument() == "err":
+            self.z_offset = OFFSET_PROBE[2]
+        print(self.z_offset)
         # Обработка G-code
         processed_lines = interpolator.process_gcode_2(lines, MAP_FILE_2)
+        print(processed_lines[:100])
+        processed_lines = gcode_analysis.added_z_offset(processed_lines, self.z_offset * -1 + 0.0)
+        print(processed_lines[:100])
 
         if PRINT_MSG: print(f"\n{'=' * 60}")
         print(f"ОБРАБОТКА ЗАВЕРШЕНА")

@@ -4,8 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="77fd6889-4fca-41a1-8064-7ba44130983c" name="Changes" comment="cuytttttdgdfggadf">
+    <list default="true" id="77fd6889-4fca-41a1-8064-7ba44130983c" name="Changes" comment="cuytttttdgdfggadfdssassadacsfxc">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcode_analysis.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcode_analysis.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_main.gcode" beforeDir="false" afterPath="$PROJECT_DIR$/output_main.gcode" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -34,6 +37,9 @@
     &quot;accountId&quot;: &quot;3acc755b-a1cf-44ad-a61e-26ccb840b0b7&quot;
   }
 }</component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 2
 }</component>
@@ -60,7 +66,7 @@
       <recent name="C:\Users\stepa.DESKTOP-SPBOIEJ\PycharmProjects\ProtoPrint_control_python" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.show_map">
+  <component name="RunManager" selected="Python.main">
     <configuration name="interpolator" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="ProtoPrint_control_python" />
       <option name="ENV_FILES" value="" />
@@ -151,8 +157,8 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.show_map" />
         <item itemvalue="Python.main" />
+        <item itemvalue="Python.show_map" />
         <item itemvalue="Python.z_shift" />
         <item itemvalue="Python.interpolator" />
       </list>
@@ -230,7 +236,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775024658649</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="cuytttttdgdfggadfdssassadacsfxc">
+      <option name="closed" value="true" />
+      <created>1775025616559</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1775025616559</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -250,6 +264,7 @@
     <MESSAGE value="brobe 777" />
     <MESSAGE value="working interpolation" />
     <MESSAGE value="cuytttttdgdfggadf" />
-    <option name="LAST_COMMIT_MESSAGE" value="cuytttttdgdfggadf" />
+    <MESSAGE value="cuytttttdgdfggadfdssassadacsfxc" />
+    <option name="LAST_COMMIT_MESSAGE" value="cuytttttdgdfggadfdssassadacsfxc" />
   </component>
 </project>

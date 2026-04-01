@@ -144,5 +144,6 @@ def added_z_offset(lines, z_offset=0.0):
             if parse_axis(line, "F") is not None:
                 f = str(parse_axis(line, "F"))
                 out_line += "F" + f + ' '
+            out_line += '\n'
         out_lines.append(out_line)
     return out_lines
