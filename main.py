@@ -220,6 +220,36 @@ class PCBHeightMapper:
             print_message("  Таймаут ожидания ответа")
             return None
 
+    def find_h_instrument(self, x: float, y: float, z: float):
+        try:
+            self.probe.up()
+            self.send_command(f"G1 Z0 F{self.scan_feedrate}")
+
+    def auto_find_delta_instrument(self): # автоматический поиск высоты инструмента
+        try:
+            self.probe.up()
+            self.send_command(f"G1 Z0 F{self.scan_feedrate}")
+            self.send_command(f"M400")
+
+            if not USE_EXTRUDER:
+                x, y, z = INSTRUMENT_HEIGH_POS
+
+                self.send_command(f"G1 Z{z:.4f} F{self.scan_feedrate}")
+                self.send_command(f"M400")
+                self.send_command(f"G1 X{x:.4f} Y{y:.4f} F{self.scan_feedrate}")
+                self.send_command(f"M400")
+
+                response = self.send_command("M329", timeout=15)
+                if response and self.trigger_prefix in response:
+                    height_str = response.split(self.trigger_prefix)[1].strip()
+                    h_instrument = float(height_str)
+                else:
+                    raise Exception
+
+
+
+
+
 
     def read_data(self, filename):
         #  чтение gcode из файла
