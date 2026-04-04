@@ -2,8 +2,8 @@ import re
 
 
 
-MARGIN_X = 2.5
-MARGIN_Y = 2.5
+MARGIN_X = 1
+MARGIN_Y = 1
 
 def parse_axis(line, axis):
     m = re.search(axis + r"([-0-9.]+)", line)
