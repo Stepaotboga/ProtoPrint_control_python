@@ -105,9 +105,11 @@ def added_xy_shift(lines, offset=(0.0, 0.0)):
             out_line = "G1 "
             if parse_axis(line, "X") is not None:
                 x = float(parse_axis(line, "X")) + x_offset
+                x = round(x, 4)
                 out_line += "X" + str(x) + ' '
             if parse_axis(line, "Y") is not None:
                 y = float(parse_axis(line, "Y")) + y_offset
+                y = round(y, 4)
                 out_line += "Y" + str(y) + ' '
             if parse_axis(line, "Z") is not None:
                 z = str(parse_axis(line, "Z"))
@@ -131,12 +133,15 @@ def added_z_offset(lines, z_offset=0.0):
             out_line = "G1 "
             if parse_axis(line, "X") is not None:
                 x = float(parse_axis(line, "X"))
+                x = round(x, 4)
                 out_line += "X" + str(x) + ' '
             if parse_axis(line, "Y") is not None:
                 y = float(parse_axis(line, "Y"))
+                y = round(y, 4)
                 out_line += "Y" + str(y) + ' '
             if parse_axis(line, "Z") is not None:
                 z = float(parse_axis(line, "Z")) + z_offset
+                z = round(z, 6)
                 out_line += "Z" + str(z) + ' '
             if parse_axis(line, "E") is not None:
                 e = str(parse_axis(line, "E"))

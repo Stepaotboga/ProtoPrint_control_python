@@ -5,6 +5,7 @@ import numpy as np
 SEGMENT_LENGTH = 0.1
 INTERPOLATION_TYPE = "bicubic"
 COMPENSATION = True
+ZERO_POINT = (0, 0, 0, 0)
 
 
 def parse_axis(line, axis):
@@ -171,7 +172,7 @@ def open_and_process_gcode(input_file, output_file):
 def process_gcode_2(lines, map_file="map.txt"):
 
     x_s,y_s,grid = load_map(map_file)
-    x = y = z = e = 0
+    x, y, z, e = ZERO_POINT
 
     x_defined = 1 # было ли последнее перемещение по этой оси
     y_defined = 1
